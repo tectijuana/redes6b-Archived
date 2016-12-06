@@ -1,0 +1,237 @@
+/RS485 by Igor Real
+
+byte            data[12];
+unsigned long   previous_time;
+byte            times_repeat=5;
+
+byte            state=0;
+
+#define  pinCONTROL    02
+#define  myaddress     01
+  
+
+void setup() {
+
+   pinMode(13,OUTPUT);
+   pinMode(pinCONTROL,OUTPUT);
+   digitalWrite(13,HIGH);
+   digitalWrite(12,LOW);
+   pinMode(8,INPUT);
+   digitalWrite(pinCONTROL,LOW);
+   Serial.begin(9600);
+   Serial.println("Empezamos");
+   state=0;
+}
+
+void loop() 
+{
+
+  delay(500);
+  if (digitalRead(8)==state){
+    state=!state;
+    times_repeat=0;   
+  } 
+ 
+  
+  
+  
+  if (times_repeat<4){
+    Serial.flush();  
+    //(byte address1,byte address2,byte data_type,byte code1,byte code2,byte Sign,byte data1,byte data2,byte data3,byte data4)
+    if (digitalRead(8)==HIGH)  sendMSG(48,49,68,48,48,32,48,48,48,49);
+    if (digitalRead(8)==LOW)   sendMSG(48,49,68,48,48,32,48,48,48,48);
+    times_repeat=times_repeat+1;
+  }
+  previous_time=millis();
+  while (((millis()-previous_time)<500) && (Serial.available()!=15)){
+    ;;
+  }
+  if (Serial.available()>=15){
+    if (receiveMSG()==1){
+      Serial.println("Trama correcta");
+      if (data[0]==48 && data[1]==49 && data[2]==6){
+        //ACK  
+        times_repeat=5;
+        Serial.println("ACK recivido");
+      }
+    }
+   }
+}
+
+
+byte receiveMSG(){
+
+  byte  byte_receive;
+  byte  state=0;
+  byte  cont1=1;
+  byte  trace_OK=0;
+
+  unsigned int checksum;
+  unsigned int checksum_trace;
+  
+  //Serial.println("estoy dentro");
+  //Serial.println(Serial.available(),DEC);
+  
+  
+  while (Serial.available() > 0){
+     
+     byte_receive=Serial.read();
+     if (byte_receive==00){
+       state=1;
+       checksum_trace=0;
+       checksum=0;
+       trace_OK=0;
+       cont1=1;
+     }else if (state==1 && cont1<=12){
+       data[cont1-1]=byte_receive;
+       checksum=checksum+byte_receive;
+       cont1=cont1+1;
+     }else if (state==1 && cont1==13){
+       checksum_trace=byte_receive<<8;
+       cont1=cont1+1; 
+     }else if (state==1 && cont1==14){
+       checksum_trace=checksum_trace+byte_receive;
+       cont1=cont1+1;
+       state=0;
+       if (checksum_trace==checksum){
+           trace_OK=1;
+       }else{
+         trace_OK=0;
+       }
+       break;
+     }
+  }
+  return trace_OK;
+
+}
+
+
+
+void sendMSG(byte address1,byte address2,byte data_type,byte code1,byte code2,byte Sign,byte data1,byte data2,byte data3,byte data4){
+  
+  unsigned int checksum_ACK;
+  checksum_ACK=address1+address2+5+data_type+code1+code2+Sign+data1+data2+data3+data4+3;
+  
+  digitalWrite(pinCONTROL,HIGH);
+  delay(100);
+  //Serial.println("Trama ACK");
+  //Serial.print("Checksum:");
+  //Serial.println(checksum_ACK,HEX);
+  Serial.print(0,BYTE); 
+  Serial.print(address1,BYTE);
+  Serial.print(address2,BYTE);
+  Serial.print(5,BYTE);
+  Serial.print(data_type,BYTE);
+  Serial.print(code1,BYTE);
+  Serial.print(code2,BYTE);
+  Serial.print(Sign,BYTE);
+  Serial.print(data1,BYTE);
+  Serial.print(data2,BYTE);
+  Serial.print(data3,BYTE);
+  Serial.print(data4,BYTE);  
+  Serial.print(3,BYTE);
+  Serial.print(((checksum_ACK>>8)&255),BYTE);
+  Serial.print(((checksum_ACK)& 255),BYTE);
+  delay(100);
+  digitalWrite(pinCONTROL,LOW);
+
+  
+  
+}
+
+
+
+void sendACK(byte address1,byte address2,byte data_type,byte code1,byte code2,byte Sign,byte data1,byte data2,byte data3,byte data4){
+  
+  unsigned int checksum_ACK;
+  checksum_ACK=address1+address2+6+data_type+code1+code2+Sign+data1+data2+data3+data4+3;
+  
+  digitalWrite(pinCONTROL,HIGH);
+  delay(100);
+  //Serial.println("Trama ACK");
+  //Serial.print("Checksum:");
+  //Serial.println(checksum_ACK,HEX);
+  Serial.print(0,BYTE); 
+  Serial.print(address1,BYTE);
+  Serial.print(address2,BYTE);
+  Serial.print(6,BYTE);
+  Serial.print(data_type,BYTE);
+  Serial.print(code1,BYTE);
+  Serial.print(code2,BYTE);
+  Serial.print(Sign,BYTE);
+  Serial.print(data1,BYTE);
+  Serial.print(data2,BYTE);
+  Serial.print(data3,BYTE);
+  Serial.print(data4,BYTE);  
+  Serial.print(3,BYTE);
+  Serial.print(((checksum_ACK>>8)&255),BYTE);
+  Serial.print(((checksum_ACK)&255),BYTE);
+  digitalWrite(pinCONTROL,LOW);
+  delay(100);
+  
+  
+}
+
+void sendNAK(byte address1,byte address2,byte data_type,byte code1,byte code2,byte Sign,byte data1,byte data2,byte data3,byte data4){
+  
+  unsigned int checksum_ACK;
+  checksum_ACK=address1+address2+6+data_type+code1+code2+Sign+data1+data2+data3+data4+3;
+  
+  digitalWrite(pinCONTROL,HIGH);
+  delay(100);
+  //Serial.println("Trama ACK");
+  //Serial.print("Checksum:");
+  //Serial.println(checksum_ACK,HEX);
+  Serial.print(0,BYTE); 
+  Serial.print(address1,BYTE);
+  Serial.print(address2,BYTE);
+  Serial.print(15,BYTE);
+  Serial.print(data_type,BYTE);
+  Serial.print(code1,BYTE);
+  Serial.print(code2,BYTE);
+  Serial.print(Sign,BYTE);
+  Serial.print(data1,BYTE);
+  Serial.print(data2,BYTE);
+  Serial.print(data3,BYTE);
+  Serial.print(data4,BYTE);  
+  Serial.print(3,BYTE);
+  Serial.print(((checksum_ACK>>8)&255),BYTE);
+  Serial.print(((checksum_ACK)&255),BYTE);
+  digitalWrite(pinCONTROL,LOW);
+  delay(100);
+  
+  
+}
+
+
+
+byte hex2num(byte x){
+
+  byte result;
+  
+  if (x>=48 && x<=57){
+    result=x-48;  
+  }else if (x>=65 && x<=70){
+    switch(x){
+      case 65:
+        result=10;
+        break;
+      case 66:
+        result=11;
+        break;
+      case 67:
+        result=12;
+        break;
+      case 68:
+        result=13;
+        break;
+      case 69:
+        result=14;
+        break;
+      case 70:
+        result=15;
+        break;     
+    }   
+  }
+  return result;  
+}

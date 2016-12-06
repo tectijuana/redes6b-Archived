@@ -1,0 +1,106 @@
+//maestro
+const int ledPin =  13;  // Numero del pin para el Led
+const int EnTxPin =  2;  // HIGH:TX y LOW:RX
+void setup() 
+{ 
+  Serial.begin(9600);
+  Serial.setTimeout(100);//establecemos un tiempo de espera de 100ms
+  //inicializamos los pines
+  pinMode(ledPin, OUTPUT);
+  pinMode(EnTxPin, OUTPUT);
+  digitalWrite(ledPin, LOW); 
+  digitalWrite(EnTxPin, HIGH); 
+} 
+ 
+void loop() 
+{ 
+   
+  int lectura = analogRead(0);//leemos el valor del potenciómetro (de 0 a 1023) 
+  int angulo= map(lectura, 0, 1023, 0, 180);// escalamos la lectura a un valor de ángulo (entre 0 y 180) 
+  //---enviamos el ángulo para mover el servo------
+  Serial.print("I"); //inicio de trama
+  Serial.print("S"); //S para indicarle que vamos a mover el servo
+  Serial.print(angulo); //ángulo  o dato
+  Serial.print("F"); //fin de trama
+  //----------------------------
+  delay(50); 
+  //---solicitamos una lectura del sensor----------
+  Serial.print("I"); //inicio de trama
+  Serial.print("L"); //L para indicarle que vamos a Leer el sensor
+  Serial.print("F"); //fin de trama
+  Serial.flush();    //Esperamos hasta que se envíen los datos
+  //----Leemos la respuesta del Esclavo-----
+  digitalWrite(EnTxPin, LOW); //RS485 como receptor
+  if(Serial.find("i"))//esperamos el inicio de trama
+  {
+      int dato=Serial.parseInt(); //recibimos valor numérico
+      if(Serial.read()=='f') //Si el fin de trama es el correcto
+       {
+         funcion(dato);  //Realizamos la acción correspondiente          
+      }
+      
+  }
+  digitalWrite(EnTxPin, HIGH); //RS485 como Transmisor
+  //----------fin de la respuesta-----------
+  
+} 
+void funcion(int dato)
+{
+  if(dato>500)
+  digitalWrite(ledPin, HIGH); 
+  else
+  digitalWrite(ledPin, LOW); 
+}
+
+//esclavo
+#include <Servo.h> 
+ 
+Servo myservo;  // creamos el objeto servo 
+const int EnTxPin =  2; 
+void setup() 
+{ 
+  Serial.begin(9600);  
+  myservo.attach(9);  // asignamos el pin 9 para el servo.
+  pinMode(EnTxPin, OUTPUT);
+  digitalWrite(EnTxPin, LOW); //RS485 como receptor
+} 
+ 
+void loop() 
+{ 
+  if(Serial.available())
+  {
+    if(Serial.read()=='I') //Si recibimos el inicio de trama
+    {
+
+      char funcion=Serial.read();//leemos el carácter de función
+      //---Si el carácter de función es una S entonces la trama es para mover el motor----------- 
+      if(funcion=='S') 
+       {
+           int angulo=Serial.parseInt(); //recibimos el ángulo
+           if(Serial.read()=='F') //Si el fin de trama es el correcto
+           {
+             if(angulo<=180) //verificamos que sea un valor en el rango del servo
+              {
+                myservo.write(angulo); //movemos el servomotor al ángulo correspondiente.
+              }   
+           }
+       }
+       //---Si el carácter de función  es L entonces el maestro está solicitando una lectura del sensor---
+       else if(funcion=='L')
+       {
+          if(Serial.read()=='F') //Si el fin de trama es el correcto
+           {
+             int lectura = analogRead(0);  //realizamos  la lectura del sensor   
+             digitalWrite(EnTxPin, HIGH);  //rs485 como transmisor
+             Serial.print("i"); //inicio de trama            
+             Serial.print(lectura); //valor del sensor
+             Serial.print("f"); //fin de trama  
+             Serial.flush(); //Esperamos hasta que se envíen los datos
+             digitalWrite(EnTxPin, LOW); //RS485 como receptor           
+           }
+       }
+    }
+  }
+  delay(10);
+} 
+
